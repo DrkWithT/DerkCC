@@ -8,12 +8,6 @@ int main() {
 
     a = b = c;
 
-    // check abc
-
-    if (a != b && b != c) {
-        return 1;
-    }
-
     if (a != b || a != c) {
         return 1;
     }

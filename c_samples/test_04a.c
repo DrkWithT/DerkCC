@@ -2,9 +2,9 @@
 
 int main() {
     int a = 1;
-    int b = 2;
+    int b = 1;
 
-    if (a != b) {
+    if (a > 0 && b > 0) {
         return 0;
     }
 

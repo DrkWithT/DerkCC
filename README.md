@@ -12,6 +12,6 @@ python3 ./DerkCC file.c
 - [x] Test and fix parser!
 - [x] Fix semantic analyzer for now!
 - [x] Create IR generator by the ASTVisitor!
-- [ ] Fix IR returns.
+- [x] Fix IR returns.
 - [ ] Create and test ASM generator.
 - [ ] Create driver logic.

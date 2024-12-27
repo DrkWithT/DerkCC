@@ -43,17 +43,11 @@ def test_impl(file_path: str):
         return True
 
 class IRGenTester(unittest.TestCase):
-    # def test_good_1(self):
-    #     self.assertTrue(test_impl('./c_samples/test_01.c'))
+    def test_good_3(self):
+        self.assertTrue(test_impl('./c_samples/test_03.c'))
 
-    # def test_good_2(self):
-    #     self.assertTrue(test_impl('./c_samples/test_02.c'))
-
-    # def test_good_3(self):
-    #     self.assertTrue(test_impl('./c_samples/test_03.c'))
-
-    # def test_good_4(self):
-    #     self.assertTrue(test_impl('./c_samples/test_04.c'))
+    def test_good_4(self):
+        self.assertTrue(test_impl('./c_samples/test_04.c'))
 
     def test_good_4a(self):
         self.assertTrue(test_impl('./c_samples/test_04a.c'))
