@@ -4,7 +4,7 @@
 """
 
 import unittest
-import pyCC.pyCmp.lexer as pycc_lexer
+import DerkCC.DCCStages.lexer as pycc_lexer
 
 PyCCToken = pycc_lexer.TokenType
 

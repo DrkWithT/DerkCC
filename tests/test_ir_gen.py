@@ -5,9 +5,9 @@
 """
 
 import unittest
-import pyCC.pyCmp.parser as par
-import pyCC.pyCmp.semantics as sem
-import pyCC.pyCmp.ir_gen as irgen
+import DerkCC.DCCStages.parser as par
+import DerkCC.DCCStages.semantics as sem
+import DerkCC.DCCStages.ir_gen as irgen
 
 def test_impl(file_path: str):
     parser = par.Parser()

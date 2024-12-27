@@ -6,8 +6,8 @@
 """
 
 import unittest
-import pyCC.pyCmp.parser as par
-import pyCC.pyCmp.semantics as sema
+import DerkCC.DCCStages.parser as par
+import DerkCC.DCCStages.semantics as sema
 
 class SemAnalyzerTester(unittest.TestCase):
     def test_good_1(self):

@@ -6,7 +6,7 @@
 """
 
 import unittest
-import pyCC.pyCmp.parser as pycc_parser
+import DerkCC.DCCStages.parser as pycc_parser
 
 class ParserTester(unittest.TestCase):
     def test_parse_1(self):
