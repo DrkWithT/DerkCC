@@ -23,6 +23,8 @@ class IRLabel(ir_types.IRStep):
 
 @dataclasses.dataclass
 class IRReturn(ir_types.IRStep):
+    result_addr: str
+
     def get_ir_type(self) -> ir_types.IRType:
         return ir_types.IRType.RETURN
 
@@ -82,8 +84,8 @@ class IREmitter(ASTVisitor):
     addr_table: AddrUsageTable = None
     name_to_addr_table: dict = None
     jump_label_i: int = None
-    temp_labels: list[str] = []
-    frame_sizes: list[int] = None
+    temp_exits: list[str] = None
+    temp_returns: list[str] = None
     results: ir_types.StepList = None
 
     def __init__(self, sem_info: sem.SemanticsTable):
@@ -99,8 +101,8 @@ class IREmitter(ASTVisitor):
             "C": None
         }
         self.jump_label_i = 0
-        self.temp_labels = []
-        self.frame_sizes = []
+        self.temp_exits = []
+        self.temp_returns = []
         self.results = []
 
     def toggle_addr_usage(self, id: str):
@@ -122,8 +124,8 @@ class IREmitter(ASTVisitor):
 
     def allocate_addr(self):
         """
-            Generates the next usable IR address to store an intermediate value if no candidates exist... but a used address can become unused after use for other operations. This logic basically uses memoization of all unoccupied IR addresses. \n
-            * If a reserved register is available, use the next one.
+            Generates the next usable IR address to store an intermediate value if no candidates exist... but a used address can become unused after use for other operations. This logic basically uses memoization of IR addresses. \n
+            * If a reserved register is available AND not for a return result, use the next one.
             * If not, use an existing temporary register if available.
             * Finally, use a new temporary register if no existing ones are available.
         """
@@ -131,7 +133,7 @@ class IREmitter(ASTVisitor):
         candidates = self.get_available_addrs()
 
         for addr in candidates:
-            if self.addr_table.get(addr) != True:
+            if self.addr_table.get(addr) != True and addr not in self.temp_returns:
                 self.toggle_addr_usage(addr)
                 return addr
 
@@ -154,19 +156,26 @@ class IREmitter(ASTVisitor):
 
         return self.results
 
-    def generate_normal_jump(self, target_label: str, op: ast.OpType, lhs: ast.Expr, rhs: ast.Expr):
+    def generate_normal_jump(self, target_label: str, expr: ast.Expr):
         # NOTE the 3 NOPs for ASSIGN, AND, OR will be handled by caller code instead...
-        op = ir_types.AST_OP_IR_MATCHES.get(op.name)
-        temp = self.allocate_addr() # a2
-        lhs_temp = lhs.accept_visitor(self)
-        rhs_temp = rhs.accept_visitor(self)
+        expr_op = ir_types.AST_OP_IR_MATCHES.get(expr.get_op_type().name)
+        temp = self.allocate_addr()
+        op_arity = expr.get_op_arity()
 
-        self.results.append(IRAssign(temp, op, [lhs_temp, rhs_temp]))
-        self.results.append(IRJumpIf(target_label, ir_types.IROp.COMPARE_NEQ, 0, temp))
+        if op_arity == ast.OpArity.BINARY:
+            lhs_temp = expr.get_lhs().accept_visitor(self)
+            rhs_temp = expr.get_rhs().accept_visitor(self)
+            self.results.append(IRAssign(temp, expr_op, [lhs_temp, rhs_temp]))
+            self.results.append(IRJumpIf(target_label, ir_types.IROp.COMPARE_NEQ, 0, temp))
+            self.toggle_addr_usage(rhs_temp)
+            self.toggle_addr_usage(lhs_temp)
+        elif op_arity == ast.OpArity.UNARY:
+            inner_temp = expr.get_inner().accept_visitor()
+            self.results.append(IRAssign(temp, expr_op, [inner_temp]))
+            self.results.append(IRJumpIf(target_label, ir_types.IROp.COMPARE_NEQ, 0, temp))
+            self.toggle_addr_usage(inner_temp)
 
         self.toggle_addr_usage(temp)
-        self.toggle_addr_usage(rhs_temp)
-        self.toggle_addr_usage(lhs_temp)
 
     def generate_inverse_jump(self, target_label: str, expr: ast.Expr):
         op = expr.get_op_type()
@@ -209,27 +218,28 @@ class IREmitter(ASTVisitor):
         if literal_token is not None:
             # TODO use allocation of IR address...
             lexeme: str = literal_token[0]
-            # raw_value: int = int(lexeme) if literal_token[2] == TokenType.LITERAL_INT else ord(lexeme[0])
             raw_value = 0
-            value_addr = self.allocate_addr()
 
             if literal_token[2] == TokenType.LITERAL_INT:
+                value_addr = self.allocate_addr()
                 raw_value = int(lexeme)
                 self.results.append(
                     IRLoadConst(value_addr, raw_value)
                 )
+                return value_addr
             elif literal_token[2] == TokenType.LITERAL_CHAR:
+                value_addr = self.allocate_addr()
                 raw_value = ord(lexeme[0])
                 self.results.append(
                     IRLoadConst(value_addr, raw_value)
                 )
+                return value_addr
             elif literal_token[2] == TokenType.IDENTIFIER:
-                temp = self.name_to_addr_table.get(lexeme)
-                raw_value = temp or 'aX'
+                value_addr = self.name_to_addr_table.get(lexeme)
                 self.results.append(
-                    IRLoadConst(value_addr, raw_value)
+                    IRLoadConst(value_addr, value_addr or 'aX')
                 )
-            return value_addr
+                return value_addr
         elif literal_arrtype is not None:
             # TODO implement array handling... allocate N addresses where N = arr.length!
             pass
@@ -250,11 +260,12 @@ class IREmitter(ASTVisitor):
         expr_lhs: ast.Expr = node.get_lhs()
         expr_rhs: ast.Expr = node.get_rhs()
         op = node.get_op_type()
-        dest_addr = self.allocate_addr()
+        dest_addr = None
 
         if op == ast.OpType.OP_LOGIC_AND:
             falsy_label = self.generate_next_label()
             truthy_label = self.generate_next_label()
+            dest_addr = self.allocate_addr()
 
             self.generate_inverse_jump(falsy_label, expr_lhs)
             self.generate_inverse_jump(falsy_label, expr_rhs)
@@ -268,9 +279,11 @@ class IREmitter(ASTVisitor):
             falsy_label = self.generate_next_label()
             truthy_label = self.generate_next_label()
             skippy_label = self.generate_next_label()
+            dest_addr = self.allocate_addr()
 
-            self.generate_normal_jump(truthy_label, expr_lhs.get_op_type(), expr_lhs, expr_rhs)
-            self.generate_normal_jump(truthy_label, expr_rhs.get_op_type(), expr_lhs, expr_rhs)
+            self.generate_normal_jump(truthy_label, expr_lhs)
+            self.generate_normal_jump(truthy_label, expr_rhs)
+            self.results.append(IRJump(falsy_label))
 
             self.results.append(IRLabel(truthy_label))
             self.results.append(IRAssign(dest_addr, ir_types.IROp.NOP, [1]))
@@ -282,11 +295,14 @@ class IREmitter(ASTVisitor):
         elif op != ast.OpType.OP_ASSIGN:
             arg0_addr = expr_lhs.accept_visitor(self)
             arg1_addr = expr_rhs.accept_visitor(self)
+            dest_addr = self.allocate_addr()
+
             self.results.append(IRAssign(dest_addr, ir_types.IROp(op.value), [arg0_addr, arg1_addr]))
 
             self.toggle_addr_usage(arg1_addr)
             self.toggle_addr_usage(arg0_addr)
         else:
+            dest_addr = expr_lhs.accept_visitor(self)
             value_addr = expr_rhs.accept_visitor(self)
             self.results.append(IRAssign(dest_addr, ir_types.IROp.NOP, [value_addr]))
             self.toggle_addr_usage(value_addr)
@@ -339,13 +355,14 @@ class IREmitter(ASTVisitor):
             self.results.append(IRLoadConst(param_addr, 0))
 
         ret_label = self.generate_next_label()
-        self.temp_labels.append(ret_label)
+        self.temp_exits.append(ret_label)
 
         node.get_body().accept_visitor(self)
 
         self.results.append(IRLabel(ret_label))
-        self.results.append(IRReturn())
-        self.temp_labels.clear()
+        self.results.append(IRReturn(self.temp_returns.pop()))
+
+        self.temp_exits.clear()
         self.name_to_addr_table.clear()
 
     def visit_expr_stmt(self, node: ast.Stmt):
@@ -377,4 +394,8 @@ class IREmitter(ASTVisitor):
         self.toggle_addr_usage(cond_addr)
 
     def visit_return(self, node: ast.Stmt):
-        self.results.append(IRJump(self.temp_labels[0]))
+        ret_count = len(self.temp_returns)
+        result_addr = node.get_result_expr().accept_visitor(self) if ret_count == 0 else self.temp_returns[ret_count - 1]
+
+        self.temp_returns.append(result_addr)
+        self.results.append(IRJump(self.temp_exits[0]))
