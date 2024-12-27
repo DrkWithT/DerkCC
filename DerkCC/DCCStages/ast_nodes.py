@@ -1,12 +1,12 @@
 """
     ast_nodes.py\n
-    Modified by DrkWithT (Derek Tan)\n
-    NOTE Should add ExprType enum to discern arg vs. param types later.
+    By DrkWithT\n
+    Implements AST structures, etc.
 """
 
 from enum import Enum, auto
-from pyCC.pyCmp.lexer import TokenObj
-import pyCC.pyCmp.ast_visitor as pycc_ast_visitor
+from DerkCC.DCCStages.lexer import TokenObj
+import DerkCC.DCCStages.ast_visitor as pycc_ast_visitor
 
 ## Enums, Types ##
 

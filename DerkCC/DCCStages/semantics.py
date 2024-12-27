@@ -1,14 +1,14 @@
 """
     semantics.py\n
-    Added by DrkWithT\n
+    By DrkWithT\n
     Contains semantic analyzer for AST checks.\n
     TODO add lvalue-rvalue semantic checks!
 """
 
 from enum import Enum, auto
-from pyCC.pyCmp.ast_visitor import ASTVisitor
-import pyCC.pyCmp.ast_nodes as nodes
-import pyCC.pyCmp.lexer as lex
+from DerkCC.DCCStages.ast_visitor import ASTVisitor
+import DerkCC.DCCStages.ast_nodes as nodes
+import DerkCC.DCCStages.lexer as lex
 
 ## Constants & Aliases ##
 

@@ -1,16 +1,16 @@
 """
     ir_gen.py\n
-    Added by DrkWithT\n
+    By DrkWithT\n
     Defines AST to IR converter.\n
     TODO add support for returning values... see visit_return()
 """
 
 import dataclasses
-from pyCC.pyCmp.ast_visitor import ASTVisitor
-from pyCC.pyCmp.lexer import TokenType
-import pyCC.pyCmp.ast_nodes as ast
-import pyCC.pyCmp.semantics as sem
-import pyCC.pyCmp.ir_types as ir_types
+from DerkCC.DCCStages.ast_visitor import ASTVisitor
+from DerkCC.DCCStages.lexer import TokenType
+import DerkCC.DCCStages.ast_nodes as ast
+import DerkCC.DCCStages.semantics as sem
+import DerkCC.DCCStages.ir_types as ir_types
 
 ## IR Types ##
 

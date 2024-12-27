@@ -1,6 +1,6 @@
 """
     ir_types.py\n
-    Added by DrkWithT\n
+    By DrkWithT\n
     Defines 3-address code IR types.
 """
 

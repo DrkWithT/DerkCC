@@ -1,12 +1,12 @@
 """
     parser.py\n
-    Modified by DrkWithT (Derek Tan) on 12/20/2024\n
+    By DrkWithT\n
     NOTE this will need a type-qualifier & type name parse function.
 """
 
 from enum import Enum, auto
-import pyCC.pyCmp.lexer as lex
-import pyCC.pyCmp.ast_nodes as ast
+import DerkCC.DCCStages.lexer as lex
+import DerkCC.DCCStages.ast_nodes as ast
 
 ## Aliases & Types & Constants ##
 

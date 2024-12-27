@@ -1,6 +1,6 @@
 """
     ASTVisitor.py\n
-    TODO implement base class to deal with various AST types...
+    By: DrkWithT
 """
 
 class ASTVisitor:

@@ -1,6 +1,7 @@
 """
-    Modified by DrkWithT (Derek Tan) at 12/20/2024:
-    Refactor lexer to recognize more tokens flexibly.
+    lexer.py\n
+    By DrkWithT\n
+    Contains tokenizer for lexing C code.
 """
 
 from enum import Enum, auto
