@@ -10,43 +10,7 @@
 import dataclasses
 from enum import Enum, auto
 
-## GAS types, aliases, and constants ##
-
-class RegRole(Enum):
-    """
-        Brief:
-        * `RET`: must not be used except for holding return values of callees.
-        * `SCRATCH`: free to use for any function.
-        * `EXTRA`: must be preserved by callees before use!
-    """
-    RET = auto()     # rax: DCC will reserve this for return values!
-    SCRATCH = auto() # rdi, rsi, rdx, rcx, r8, r9, r10, r11
-    EXTRA = auto()   # rbx, rsp, rbp, r12, r13, r14, r15
-
-@dataclasses.dataclass
-class RegisterInfo:
-    role: RegRole
-    preserved: bool
-    argy: bool
-
-GAS_REGISTER_HINTS = {
-    "%rax": RegisterInfo(RegRole.RET, False, False),
-    "%rdi": RegisterInfo(RegRole.SCRATCH, False, True),
-    "%rsi": RegisterInfo(RegRole.SCRATCH, False, True),
-    "%rdx": RegisterInfo(RegRole.SCRATCH, False, True),
-    "%rcx": RegisterInfo(RegRole.SCRATCH, False, True),
-    "%r8": RegisterInfo(RegRole.SCRATCH, False, True),
-    "%r9": RegisterInfo(RegRole.SCRATCH, False, True),
-    "%r10": RegisterInfo(RegRole.SCRATCH, False, False),
-    "%r11": RegisterInfo(RegRole.SCRATCH, False, False),
-    "%rbx": RegisterInfo(RegRole.EXTRA, True, False),
-    "%rsp": RegisterInfo(RegRole.EXTRA, True, False),
-    "%rbp": RegisterInfo(RegRole.EXTRA, True, False),
-    "%r12": RegisterInfo(RegRole.EXTRA, True, False),
-    "%r13": RegisterInfo(RegRole.EXTRA, True, False),
-    "%r14": RegisterInfo(RegRole.EXTRA, True, False),
-    "%r15": RegisterInfo(RegRole.EXTRA, True, False)
-}
+# FIXME add utilities to allocate registers from various groups: scratch, call, etc. See 9cc compiler repo.
 
 @dataclasses.dataclass
 class LocationInfo:
@@ -60,5 +24,4 @@ C_TYPE_SIZES = {
     "UNKNOWN": 0
 }
 
-MemTable = dict[str, LocationInfo]
 ASMLines = list[str]

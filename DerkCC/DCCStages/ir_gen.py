@@ -5,22 +5,38 @@
     TODO add support for returning values... see visit_return()
 """
 
+import dataclasses
 from DerkCC.DCCStages.ast_visitor import ASTVisitor
 from DerkCC.DCCStages.lexer import TokenType
 import DerkCC.DCCStages.ast_nodes as ast
 import DerkCC.DCCStages.semantics as sem
 import DerkCC.DCCStages.ir_types as ir_types
 
+## Utility types ##
+
+# NOTE models a function-local: parameter or variable
+LocalRecord = tuple[ast.DataType, str]
+
+# NOTE models important function info, specifically all its locals
+FuncInfo = list[LocalRecord]
+
+# NOTE models all function info entries
+FuncInfoTable = dict[str, FuncInfo]
+
 ## IR Generator ##
 
 class IREmitter(ASTVisitor):
     AddrUsageTable = dict[str, bool] # NOTE format is "a{num}": bool.
 
+    sem_table: sem.SemanticsTable = None
     addr_table: AddrUsageTable = None
     name_to_addr_table: dict = None
     jump_label_i: int = None
     temp_exits: list[str] = None
     temp_returns: list[str] = None
+
+    curr_func_name: str
+    funcs: FuncInfoTable
     results: ir_types.StepList = None
 
     def __init__(self, sem_info: sem.SemanticsTable):
@@ -38,6 +54,8 @@ class IREmitter(ASTVisitor):
         self.jump_label_i = 0
         self.temp_exits = []
         self.temp_returns = []
+        self.curr_func_name = None
+        self.funcs = FuncInfoTable()
         self.results = []
 
     def toggle_addr_usage(self, id: str):
@@ -84,6 +102,15 @@ class IREmitter(ASTVisitor):
         self.jump_label_i += 1
 
         return f'L{temp_label_i}'
+
+    def record_func_name(self, fn_name: str):
+        self.funcs[fn_name] = []
+
+    def register_func_local(self, fn_name: str, local_type: ast.DataType, local_ir_name: str):
+        self.funcs[fn_name].append((local_type, local_ir_name))
+
+    def get_func_infos(self) -> FuncInfoTable:
+        return self.funcs
 
     def gen_ir_from_ast(self, ast: list[ast.Stmt]):
         for stmt in ast:
@@ -269,6 +296,8 @@ class IREmitter(ASTVisitor):
 
     def visit_variable_decl(self, node: ast.Stmt):
         var_addr = self.allocate_addr()
+        self.register_func_local(self.curr_func_name, node.get_type(), var_addr)
+
         self.name_to_addr_table[node.get_name()] = var_addr
         rhs_addr: str = node.get_rhs().accept_visitor(self)
         self.results.append(ir_types.IRAssign(var_addr, ir_types.IROp.NOP, [rhs_addr]))
@@ -281,11 +310,15 @@ class IREmitter(ASTVisitor):
     def visit_function_decl(self, node: ast.Stmt):
         func_name: str = node.get_name()
         func_param_v: ast.ParamList = node.get_params()
+        self.curr_func_name = func_name
+        self.funcs[func_name] = []
 
         self.results.append(ir_types.IRLabel(func_name))
 
         for param in func_param_v:
             param_addr = self.allocate_addr()
+            self.register_func_local(func_name, param[0], param_addr)
+
             self.name_to_addr_table[param[1]] = param_addr
             self.results.append(ir_types.IRLoadConst(param_addr, 0))
 
@@ -297,6 +330,7 @@ class IREmitter(ASTVisitor):
         self.results.append(ir_types.IRLabel(ret_label))
         self.results.append(ir_types.IRReturn(self.temp_returns.pop()))
 
+        self.curr_func_name = None
         self.temp_exits.clear()
         self.name_to_addr_table.clear()
 
