@@ -1,5 +1,5 @@
 """
-     py\n
+    ir_types.py\n
     By DrkWithT\n
     Defines 3-address code IR types.
 """
@@ -75,6 +75,9 @@ class IRStep:
     def get_ir_type(self) -> IRType:
         pass
 
+    def accept_visitor(self, visitor) -> "any":
+        pass
+
 StepList = list[IRStep]
 
 ## IR models ##
@@ -86,6 +89,9 @@ class IRLabel(IRStep):
     def get_ir_type(self) -> IRType:
         return IRType.LABEL
 
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_label(self)
+
 @dataclasses.dataclass
 class IRReturn(IRStep):
     result_addr: str
@@ -93,12 +99,18 @@ class IRReturn(IRStep):
     def get_ir_type(self) -> IRType:
         return IRType.RETURN
 
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_return(self)
+
 @dataclasses.dataclass
-class IRJump( IRStep):
+class IRJump(IRStep):
     target: str
 
     def get_ir_type(self) -> IRType:
         return IRType.JUMP
+
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_jump(self)
 
 @dataclasses.dataclass
 class IRJumpIf(IRStep):
@@ -110,6 +122,9 @@ class IRJumpIf(IRStep):
     def get_ir_type(self) -> IRType:
         return IRType.JUMP_IF
 
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_jump_if(self)
+
 @dataclasses.dataclass
 class IRPushArg(IRStep):
     arg: str | int
@@ -117,12 +132,18 @@ class IRPushArg(IRStep):
     def get_ir_type(self) -> IRType:
         return IRType.ARGV_PUSH
 
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_push_arg(self)
+
 @dataclasses.dataclass
 class IRCallFunc(IRStep):
     callee: str
 
     def get_ir_type(self) -> IRType:
         return IRType.FUNC_CALL
+
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_call_func(self)
 
 @dataclasses.dataclass
 class IRAssign(IRStep):
@@ -133,6 +154,9 @@ class IRAssign(IRStep):
     def get_ir_type(self) -> IRType:
         return IRType.ADDR_ASSIGN
 
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_assign(self)
+
 @dataclasses.dataclass
 class IRLoadConst(IRStep):
     addr: str
@@ -140,3 +164,6 @@ class IRLoadConst(IRStep):
 
     def get_ir_type(self) -> IRType:
         return IRType.LOAD_CONSTANT
+
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_load_const(self)
