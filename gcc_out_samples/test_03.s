@@ -1,39 +1,43 @@
 	.build_version macos,  14, 0
-; GNU C99 (Homebrew GCC 14.2.0) version 14.2.0 (x86_64-apple-darwin23)
-;	compiled by GNU C version 14.2.0, GMP version 6.3.0, MPFR version 4.2.1, MPC version 1.3.1, isl version isl-0.27-GMP
-
-; GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
-; options passed: -fPIC -mmacosx-version-min=14.0.0 -mtune=core2 -std=c99
 	.text
+	.globl _maxOfTwo
+_maxOfTwo:
+LFB0:
+	pushq	%rbp
+LCFI0:
+	movq	%rsp, %rbp
+LCFI1:
+	movl	%edi, -4(%rbp)
+	movl	%esi, -8(%rbp)
+	movl	-4(%rbp), %eax
+	cmpl	-8(%rbp), %eax
+	jge	L2
+	movl	-8(%rbp), %eax
+	jmp	L3
+L2:
+	movl	-4(%rbp), %eax
+L3:
+	popq	%rbp
+LCFI2:
+	ret
+LFE0:
 	.globl _main
 _main:
-LFB0:
-	pushq	%rbp	;
-LCFI0:
-	movq	%rsp, %rbp	;,
-LCFI1:
-; ../c_samples/test_04a.c:4:     int a = 1;
-	movl	$1, -4(%rbp)	;, a
-; ../c_samples/test_04a.c:5:     int b = 1;
-	movl	$1, -8(%rbp)	;, b
-; ../c_samples/test_04a.c:7:     if (a > 0 && b > 0) {
-	cmpl	$0, -4(%rbp)	;, a
-	jle	L2	#,
-; ../c_samples/test_04a.c:7:     if (a > 0 && b > 0) {
-	cmpl	$0, -8(%rbp)	;, b
-	jle	L2	;,
-; ../c_samples/test_04a.c:8:         return 0;
-	movl	$0, %eax	;, _1
-	jmp	L3	;
-L2:
-; ../c_samples/test_04a.c:11:     return 1;
-	movl	$1, %eax	;, _1
-L3:
-; ../c_samples/test_04a.c:12: }
-	popq	%rbp	;
-LCFI2:
-	ret	
-LFE0:
+LFB1:
+	pushq	%rbp
+LCFI3:
+	movq	%rsp, %rbp
+LCFI4:
+	subq	$16, %rsp
+	movl	$69, %esi
+	movl	$420, %edi
+	call	_maxOfTwo
+	movl	%eax, -4(%rbp)
+	movl	$0, %eax
+	leave
+LCFI5:
+	ret
+LFE1:
 	.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support
 EH_frame1:
 	.set L$set$0,LECIE1-LSCIE1
@@ -83,5 +87,34 @@ LASFDE1:
 	.uleb128 0x8
 	.align 3
 LEFDE1:
+LSFDE3:
+	.set L$set$6,LEFDE3-LASFDE3
+	.long L$set$6
+LASFDE3:
+	.long	LASFDE3-EH_frame1
+	.quad	LFB1-.
+	.set L$set$7,LFE1-LFB1
+	.quad L$set$7
+	.uleb128 0
+	.byte	0x4
+	.set L$set$8,LCFI3-LFB1
+	.long L$set$8
+	.byte	0xe
+	.uleb128 0x10
+	.byte	0x86
+	.uleb128 0x2
+	.byte	0x4
+	.set L$set$9,LCFI4-LCFI3
+	.long L$set$9
+	.byte	0xd
+	.uleb128 0x6
+	.byte	0x4
+	.set L$set$10,LCFI5-LCFI4
+	.long L$set$10
+	.byte	0xc
+	.uleb128 0x7
+	.uleb128 0x8
+	.align 3
+LEFDE3:
 	.ident	"GCC: (Homebrew GCC 14.2.0) 14.2.0"
 	.subsections_via_symbols

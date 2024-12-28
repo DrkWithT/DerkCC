@@ -31,7 +31,8 @@ def test_impl(file_path: str):
             print(f'Semantic validation failed for {file_path}!')
             return False
 
-        ir_result = irgen.IREmitter(checker.eject_semantic_info()).gen_ir_from_ast(ast)
+        ir_maker = irgen.IREmitter(checker.eject_semantic_info())
+        ir_result = ir_maker.gen_ir_from_ast(ast)
 
         if not ir_result:
             print(f'No IR generated for {file_path}!')
@@ -41,7 +42,7 @@ def test_impl(file_path: str):
         for step in ir_result:
             print(f'{step}')
 
-        asm_result = asmgen.GASEmitter().emit_all(ir_result)
+        asm_result = asmgen.GASEmitter(ir_maker.get_func_infos()).emit_all(ir_result)
 
         print('Generated ASM:\n')
         for asm_line in asm_result:
@@ -54,14 +55,17 @@ def test_impl(file_path: str):
         return True
 
 class GASEmitterTester(unittest.TestCase):
-    def test_good_1(self):
-        self.assertTrue(test_impl('./c_samples/test_01.c'))
+    # def test_good_1(self):
+    #     self.assertTrue(test_impl('./c_samples/test_01.c'))
 
     # def test_good_2(self):
     #     self.assertTrue(test_impl('./c_samples/test_02.c'))
 
-    # def test_good_3(self):
-    #     self.assertTrue(test_impl('./c_samples/test_03.c'))
+    def test_good_3(self):
+        self.assertTrue(test_impl('./c_samples/test_03.c'))
 
     # def test_good_4a(self):
     #     self.assertTrue(test_impl('./c_samples/test_04a.c'))
+
+if __name__ == '__main__':
+    unittest.main()
