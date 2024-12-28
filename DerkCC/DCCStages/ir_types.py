@@ -1,9 +1,10 @@
 """
-    ir_types.py\n
+     py\n
     By DrkWithT\n
     Defines 3-address code IR types.
 """
 
+import dataclasses
 from enum import Enum, auto
 
 ## Aliases and Types ##
@@ -75,3 +76,67 @@ class IRStep:
         pass
 
 StepList = list[IRStep]
+
+## IR models ##
+
+@dataclasses.dataclass
+class IRLabel(IRStep):
+    title: str
+
+    def get_ir_type(self) -> IRType:
+        return IRType.LABEL
+
+@dataclasses.dataclass
+class IRReturn(IRStep):
+    result_addr: str
+
+    def get_ir_type(self) -> IRType:
+        return IRType.RETURN
+
+@dataclasses.dataclass
+class IRJump( IRStep):
+    target: str
+
+    def get_ir_type(self) -> IRType:
+        return IRType.JUMP
+
+@dataclasses.dataclass
+class IRJumpIf(IRStep):
+    target: str
+    op: IROp
+    arg0: str | int
+    arg1: str | int
+
+    def get_ir_type(self) -> IRType:
+        return IRType.JUMP_IF
+
+@dataclasses.dataclass
+class IRPushArg(IRStep):
+    arg: str | int
+
+    def get_ir_type(self) -> IRType:
+        return IRType.ARGV_PUSH
+
+@dataclasses.dataclass
+class IRCallFunc(IRStep):
+    callee: str
+
+    def get_ir_type(self) -> IRType:
+        return IRType.FUNC_CALL
+
+@dataclasses.dataclass
+class IRAssign(IRStep):
+    dest: str
+    op: IROp
+    operands: list[str | int]
+
+    def get_ir_type(self) -> IRType:
+        return IRType.ADDR_ASSIGN
+
+@dataclasses.dataclass
+class IRLoadConst(IRStep):
+    addr: str
+    value: int
+
+    def get_ir_type(self) -> IRType:
+        return IRType.LOAD_CONSTANT
