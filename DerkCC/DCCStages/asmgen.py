@@ -94,20 +94,19 @@ class GASEmitter(IRVisitor):
         self.ir_to_gas_loc[locator] = gas.LocationInfo(gas_locator, True)
 
     def lookup_location(self, locator: str) -> gas.LocationInfo:
-        return self.ir_to_gas_loc[locator]
+        self.ir_to_gas_loc[locator].used = True
+        return self.ir_to_gas_loc.get(locator)
 
     def toggle_location_usage(self, locator: str):
         flip = not self.ir_to_gas_loc.get(locator).used
         self.ir_to_gas_loc[locator].used = flip
 
     def cull_temp_locations(self):
-        locator_ids = self.ir_to_gas_loc.keys()
+        loc_ids = [loc for loc in self.ir_to_gas_loc]
 
-        for loc_id in locator_ids:
+        for loc_id in loc_ids:
             # NOTE I can remove all temps by 1 fact: they're always stored under RBP in stack frames, so I just check for the '-' prefix of `-n(%rbp)`.
-            peeked_entry = self.ir_to_gas_loc.get(loc_id) or DUD_LOCATOR
-
-            if peeked_entry[0] == '-':
+            if self.ir_to_gas_loc.get(loc_id).gas_name[0] == '-':
                 del self.ir_to_gas_loc[loc_id]
 
     def get_register_choices(self) -> list[str]:
@@ -159,6 +158,7 @@ class GASEmitter(IRVisitor):
 
         self.results.append(f'\tmovq {result_addr}, %rax\n')
         self.results.append(f'\tpopq %rbp\n')
+        self.results.append('\tret\n')
         self.toggle_location_usage(ir_addr)
         self.current_sframe_size = 0
         self.temps_n = 0
@@ -201,7 +201,7 @@ class GASEmitter(IRVisitor):
         ir_addr: str | int = step.arg
 
         if self.current_argc < 6:
-            gas_arg_src = self.lookup_location(ir_addr)
+            gas_arg_src = self.lookup_location(ir_addr).gas_name
             gas_arg_dest = self.allocate_location(ir_addr, LocatorChoice.EITHER)
             self.current_argv.append(gas_arg_dest)
             self.results.append(f'\tmovq {gas_arg_src}, {gas_arg_dest}\n')
@@ -222,19 +222,18 @@ class GASEmitter(IRVisitor):
 
     def visit_assign(self, step: ir_bits.IRStep):
         ir_dest_addr: str = step.dest
-        ir_op: ir_bits.IrOp = step.op
-        gas_dest_opt = self.lookup_location(ir_dest_addr)
-        gas_dest_addr: str = gas_dest_opt.gas_name if gas_dest_opt is not None else self.allocate_location(ir_arg_0, LocatorChoice.EITHER)
-
-        gas_op: str = IR_OP_TO_GAS.get(ir_op)
+        ir_op: ir_bits.IROp = step.op
         ir_arg_0: str | int = step.operands[0]
-        ir_arg_1: str | int = step.operands[1]
+        ir_arg_1: str | int = step.operands[1] if len(step.operands) == 2 else None
+        gas_op: str = IR_OP_TO_GAS.get(ir_op.name)
 
-        gas_arg_0 = f'${ir_arg_0}' if ir_arg_0.strip is None else self.lookup_location(ir_arg_0) or self.allocate_location(ir_arg_0, LocatorChoice.EITHER)
+        gas_dest_addr = self.allocate_location(ir_arg_0, LocatorChoice.EITHER) if not self.ir_to_gas_loc.get(ir_dest_addr) else self.lookup_location(ir_dest_addr)
+
+        gas_arg_0 = f'${ir_arg_0}' if ir_arg_0.strip is None else self.lookup_location(ir_arg_0)
 
         # handle no-arg ops
         if gas_op == 'nop':
-            if ir_dest_addr == ir_arg_0 or ir_dest_addr == ir_arg_1:
+            if ir_dest_addr == ir_arg_0 or ir_dest_addr == ir_arg_1 or self.lookup_location(ir_arg_0) is not None:
                 return
 
             self.results.append(f'\tmovq {gas_arg_0}, {gas_dest_addr}\n')

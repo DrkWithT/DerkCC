@@ -43,10 +43,10 @@ def test_impl(file_path: str):
 
         asm_result = asmgen.GASEmitter().emit_all(ir_result)
 
+        print('Generated ASM:\n')
         for asm_line in asm_result:
             print(asm_line)
 
-        print('Generated ASM:\n')
         if not asm_line:
             print(f'No ASM generated for {file_path}!')
             return False
