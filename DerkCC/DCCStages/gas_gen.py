@@ -8,21 +8,33 @@
     TODO Overhaul the register/location allocation logic... see 9cc code.
 """
 
+import dataclasses
 from enum import Enum, auto
 import DerkCC.DCCStages.ir_types as ir_bits
 import DerkCC.DCCStages.ir_gen as ir_gen
 from DerkCC.DCCStages.ir_visitor import IRVisitor
-import DerkCC.DCCStages.asm as gas
 
-## Aliases & Enums ##
-IRSteps = list[ir_bits.IRStep]
+## Utility types ##
+
+@dataclasses.dataclass
+class LocationInfo:
+    gas_name: str
+    used: bool
 
 class LocatorChoice(Enum):
     REGISTER = auto()
     STACKY = auto()
     EITHER = auto()
 
-## Constants #
+## Constants ##
+
+C_TYPE_SIZES = {
+    "CHAR": 1,
+    "INT": 4,
+    "VOID": 0,
+    "UNKNOWN": 0
+}
+
 LOCATION_TABLE_MINSIZE = 16 # there are 16 registers on x64
 
 IR_COMPARE_TO_JMP = {
@@ -53,6 +65,11 @@ IR_OP_TO_GAS = {
     "SUBTRACT": "sub",
     "NOP": "nop"
 }
+
+## Aliases ##
+
+ASMLines = list[str]
+IRSteps = list[ir_bits.IRStep]
 
 ## Utility functions ##
 
