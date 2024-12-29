@@ -16,7 +16,7 @@ class IRType(Enum):
     JUMP_IF = auto()       # JumpIf
     ARGV_PUSH = auto()     # PushArg <arg>
     FUNC_CALL = auto()     # Call <name>
-    ADDR_DECLARE = auto()  # <addr> = <expr>
+    STORE_YIELD = auto()   # StoreYield <result??>
     ADDR_ASSIGN = auto()   # <addr> = <addr> <op> <addr>
     LOAD_CONSTANT = auto() # $<integral>
 
@@ -128,6 +128,7 @@ class IRJumpIf(IRStep):
 @dataclasses.dataclass
 class IRPushArg(IRStep):
     arg: str | int
+    immediate: bool
 
     def get_ir_type(self) -> IRType:
         return IRType.ARGV_PUSH
@@ -146,10 +147,19 @@ class IRCallFunc(IRStep):
         return visitor.visit_call_func(self)
 
 @dataclasses.dataclass
+class IRStoreYield(IRStep):
+    def get_ir_type(self) -> IRType:
+        return IRType.STORE_YIELD
+
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_store_yield(self)
+
+@dataclasses.dataclass
 class IRAssign(IRStep):
     dest: str
     op: IROp
-    operands: list[str | int]
+    arg0: str | int
+    arg1: str | int | None
 
     def get_ir_type(self) -> IRType:
         return IRType.ADDR_ASSIGN

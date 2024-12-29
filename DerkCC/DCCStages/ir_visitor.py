@@ -22,6 +22,9 @@ class IRVisitor:
     def visit_push_arg(self, step: ir_bits.IRStep) -> "any":
         pass
 
+    def visit_store_yield(self, step: ir_bits.IRStep) -> "any":
+        pass
+
     def visit_call_func(self, step: ir_bits.IRStep) -> "any":
         pass
 
