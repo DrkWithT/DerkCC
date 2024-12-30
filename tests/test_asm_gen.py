@@ -8,7 +8,7 @@ import unittest
 import DerkCC.DCCStages.parser as par
 import DerkCC.DCCStages.semantics as sem
 import DerkCC.DCCStages.ir_gen as irgen
-import DerkCC.DCCStages.asmgen as asmgen
+import DerkCC.DCCStages.gas_gen as asmgen
 
 def test_impl(file_path: str):
     parser = par.Parser()
@@ -44,25 +44,25 @@ def test_impl(file_path: str):
 
         asm_result = asmgen.GASEmitter(ir_maker.get_func_infos()).emit_all(ir_result)
 
+        if not asm_result:
+            print(f'No ASM generated for {file_path}!')
+            return False
+
         print('Generated ASM:\n')
         for asm_line in asm_result:
             print(asm_line)
 
-        if not asm_line:
-            print(f'No ASM generated for {file_path}!')
-            return False
-
         return True
 
 class GASEmitterTester(unittest.TestCase):
-    # def test_good_1(self):
-    #     self.assertTrue(test_impl('./c_samples/test_01.c'))
+    def test_good_1(self):
+        self.assertTrue(test_impl('./c_samples/test_01.c'))
 
     # def test_good_2(self):
     #     self.assertTrue(test_impl('./c_samples/test_02.c'))
 
-    def test_good_3(self):
-        self.assertTrue(test_impl('./c_samples/test_03.c'))
+    # def test_good_3(self):
+    #     self.assertTrue(test_impl('./c_samples/test_03.c'))
 
     # def test_good_4a(self):
     #     self.assertTrue(test_impl('./c_samples/test_04a.c'))
