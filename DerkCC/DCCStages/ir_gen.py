@@ -12,8 +12,8 @@ import DerkCC.DCCStages.ir_types as ir_types
 
 ## Utility types ##
 
-# NOTE models a function-local: parameter or variable
-LocalRecord = tuple[ast.DataType, str]
+# NOTE models a function-local: datatype, ir_address, is_param
+LocalRecord = tuple[ast.DataType, str, bool]
 
 # NOTE models important function info, specifically all its locals
 FuncInfo = list[LocalRecord]
@@ -104,8 +104,8 @@ class IREmitter(ASTVisitor):
     def record_func_name(self, fn_name: str):
         self.funcs[fn_name] = []
 
-    def register_func_local(self, fn_name: str, local_type: ast.DataType, local_ir_name: str):
-        self.funcs[fn_name].append((local_type, local_ir_name))
+    def register_func_local(self, fn_name: str, local_type: ast.DataType, local_ir_name: str, is_param: bool):
+        self.funcs[fn_name].append((local_type, local_ir_name, is_param))
 
     def get_func_infos(self) -> FuncInfoTable:
         return self.funcs
@@ -284,15 +284,16 @@ class IREmitter(ASTVisitor):
                 temp_arg_addr: str = arg.accept_visitor(self)
                 self.results.append(ir_types.IRPushArg(temp_arg_addr, False))
 
-        if func_retype == ast.DataType.VOID:
-            self.results.append(ir_types.IRCallFunc(func_name))
-        elif func_retype != ast.DataType.UNKNOWN:
-            self.results.append(ir_types.IRCallFunc(func_name))
-            self.results.append(ir_types.IRStoreYield())
+        self.results.append(ir_types.IRCallFunc(func_name))
+
+        if func_retype != ast.DataType.UNKNOWN and func_retype != ast.DataType.VOID:
+            result_addr = self.allocate_addr()
+            self.results.append(ir_types.IRStoreYield(result_addr))
+            return result_addr
 
     def visit_variable_decl(self, node: ast.Stmt):
         var_addr = self.allocate_addr()
-        self.register_func_local(self.curr_func_name, node.get_type(), var_addr)
+        self.register_func_local(self.curr_func_name, node.get_type(), var_addr, False)
 
         self.name_to_addr_table[node.get_name()] = var_addr
         rhs_addr: str = node.get_rhs().accept_visitor(self)
@@ -313,10 +314,10 @@ class IREmitter(ASTVisitor):
 
         for param in func_param_v:
             param_addr = self.allocate_addr()
-            self.register_func_local(func_name, param[0], param_addr)
+            self.register_func_local(func_name, param[0], param_addr, True)
 
             self.name_to_addr_table[param[1]] = param_addr
-            self.results.append(ir_types.IRLoadConst(param_addr, 0))
+            self.results.append(ir_types.IRLoadParam(param_addr))
 
         ret_label = self.generate_next_label()
         self.temp_exits.append(ret_label)

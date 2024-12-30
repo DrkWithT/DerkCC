@@ -17,6 +17,7 @@ class IRType(Enum):
     ARGV_PUSH = auto()     # PushArg <arg>
     FUNC_CALL = auto()     # Call <name>
     STORE_YIELD = auto()   # StoreYield <result??>
+    LOAD_PARAM = auto()   # StoreParam <addr>
     ADDR_ASSIGN = auto()   # <addr> = <addr> <op> <addr>
     LOAD_CONSTANT = auto() # $<integral>
 
@@ -148,11 +149,23 @@ class IRCallFunc(IRStep):
 
 @dataclasses.dataclass
 class IRStoreYield(IRStep):
+    target: str
+
     def get_ir_type(self) -> IRType:
         return IRType.STORE_YIELD
 
     def accept_visitor(self, visitor) -> "any":
         return visitor.visit_store_yield(self)
+
+@dataclasses.dataclass
+class IRLoadParam(IRStep):
+    target: str
+
+    def get_ir_type(self) -> IRType:
+        return IRType.LOAD_PARAM
+
+    def accept_visitor(self, visitor) -> "any":
+        return visitor.visit_load_param(self)
 
 @dataclasses.dataclass
 class IRAssign(IRStep):
