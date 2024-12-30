@@ -20,21 +20,21 @@ maxOfTwo:
 
         pushq %r15
 
-        movq %rdi, -4(%rbp)
+        movl %edi, -4(%rbp)
 
-        movq %rsi, -8(%rbp)
+        movl %esi, -8(%rbp)
 
-        movq $0, %r10
+        movl $0, %r10d
 
         cmp -8(%rbp), -4(%rbp)
 
-        cmovl $1, %r10
+        cmovl $1, %r10d
 
-        cmp %r10, $0
+        cmp %r10d, $0
 
         je L1
 
-        movq -8(%rbp), -4(%rbp)
+        movl -8(%rbp), -4(%rbp)
 
         jmp L0
 
@@ -42,7 +42,7 @@ maxOfTwo:
 
 L1:
 
-        movq -4(%rbp), -8(%rbp)
+        movl -4(%rbp), -8(%rbp)
 
         jmp L0
 
@@ -50,7 +50,7 @@ L2:
 
 L0:
 
-        movq -8(%rbp), %rax
+        movl -8(%rbp), %eax
         popq %r15
 
         popq %r14
@@ -59,7 +59,7 @@ L0:
 
         popq %r12
 
-        mov %rbp, %rsp
+        movq %rbp, %rsp
 
         popq %rbp
 
@@ -83,33 +83,33 @@ main:
 
         pushq %r15
 
-        movq $420, %rdi
+        movl $420, %edi
 
-        movq $69, %rsi
+        movl $69, %esi
 
-        push %r10
+        pushq %r10
 
-        push %r11
+        pushq %r11
 
         xor %rax, %rax
 
         call maxOfTwo
 
-        pop %r11
+        popq %r11
 
-        pop %r10
+        popq %r10
 
-        movq %rax, %r10
+        movl %eax, %r10d
 
-        movq %r10, -4(%rbp)
+        movl %r10d, -4(%rbp)
 
-        movq $0, -8(%rbp)
+        movl $0, -8(%rbp)
 
         jmp L3
 
 L3:
 
-        movq -8(%rbp), %rax
+        movl -8(%rbp), %eax
         popq %r15
 
         popq %r14
@@ -118,7 +118,7 @@ L3:
 
         popq %r12
 
-        mov %rbp, %rsp
+        movq %rbp, %rsp
 
         popq %rbp
 
