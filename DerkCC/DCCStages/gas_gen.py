@@ -10,6 +10,7 @@
 
 import dataclasses
 from enum import Enum, auto
+from DerkCC.DCCStages.ast_nodes import DataType
 import DerkCC.DCCStages.ir_types as ir_bits
 import DerkCC.DCCStages.ir_gen as ir_gen
 from DerkCC.DCCStages.ir_visitor import IRVisitor
@@ -95,10 +96,22 @@ class RegisterAllocator:
         self.arg_lru = []
 
         for reg64 in GENERAL_REGS_64:
-            self.gen_pool[reg64] = True
+            self.gen_pool[reg64] = False
 
         for arg64 in ARG_REGS_64:
             self.arg_pool[arg64] = False
+
+    def release_all(self, kind: RegisterKind):
+        if kind == RegisterKind.GENERAL:
+            self.gen_lru.clear()
+
+            for gen in self.gen_pool:
+                self.gen_pool[gen] = False
+        elif kind == RegisterKind.ARG:
+            self.arg_lru.clear()
+
+            for arg in self.arg_pool:
+                self.arg_pool[arg] = False
 
     def salvage_oldest_reg(self, kind: RegisterKind) -> str | None:
         pool_ref = self.gen_pool if kind == RegisterKind.GENERAL else self.arg_pool
@@ -159,7 +172,6 @@ class TempAllocator:
         self.frame_offset = 0
         self.max_local_count = local_n
         self.local_count = 0
-        print(f'gas_gen.py::TempAllocator [LOG]: max={self.max_local_count} , c={self.local_count}')
 
     def allocate_temp(self, var: ir_gen.LocalRecord) -> str | None:
         if self.local_count >= self.max_local_count:
@@ -234,10 +246,12 @@ class GASEmitter(IRVisitor):
             # 2. allocate params and locals to stack locations...
             self.current_funcinfo = [item for item in self.func_info.get(label_name)]
             self.temp_allocator.reset_state(len(self.current_funcinfo))
-            print(f'gas_gen.py [LOG]: reset temp_n as {len(self.current_funcinfo)}') # debug
 
             for fn_local in self.current_funcinfo:
                 datatype, ir_addr, is_param = fn_local
+
+                if datatype == DataType.UNKNOWN:
+                    break
 
                 if is_param is not False:
                     param_dest = self.temp_allocator.allocate_temp(fn_local)
@@ -266,6 +280,11 @@ class GASEmitter(IRVisitor):
         self.results.append(f'\tpopq %rbp\n')
         self.results.append(f'\tret\n')
 
+        self.ir_to_gastemp.clear()
+        self.temp_allocator.reset_state(0)
+        self.ir_to_gasreg.clear()
+        self.reg_allocator.release_all(RegisterKind.GENERAL)
+        self.reg_allocator.release_all(RegisterKind.ARG)
         self.current_funcinfo = None
 
     def visit_jump(self, step: ir_bits.IRStep):
@@ -281,7 +300,7 @@ class GASEmitter(IRVisitor):
         gas_cond_arg0 = self.ir_to_gasreg.get(jump_ir_arg0) or self.ir_to_gastemp.get(jump_ir_arg0) if type(jump_ir_arg0) != int else f'${jump_ir_arg0}'
         gas_cond_arg1 = self.ir_to_gasreg.get(jump_ir_arg1) or self.ir_to_gastemp.get(jump_ir_arg1) if type(jump_ir_arg1) != int else f'${jump_ir_arg1}'
 
-        gas_cond_jump = IR_COMPARE_TO_JMP.get(jump_ir_op)
+        gas_cond_jump = IR_COMPARE_TO_JMP.get(jump_ir_op.name)
 
         if gas_cond_jump != 'nop':
             self.results.append(f'\tcmp {gas_cond_arg1}, {gas_cond_arg0}\n')
@@ -304,16 +323,16 @@ class GASEmitter(IRVisitor):
 
         if type(gas_cond_arg0) == int:
             pass
-        elif gas_cond_arg0[0] == '-':
+        elif gas_cond_arg0 is not None and gas_cond_arg0[0] == '-':
             self.temp_allocator.release_temp(gas_cond_arg0)
-        else:
+        elif gas_cond_arg0 is not None:
             self.reg_allocator.release_reg(gas_cond_arg0)
 
         if type(gas_cond_arg1) == int:
             pass
-        elif gas_cond_arg1[0] == '-':
+        elif gas_cond_arg1 is not None and gas_cond_arg1[0] == '-':
             self.temp_allocator.release_temp(gas_cond_arg1)
-        else:
+        elif gas_cond_arg0 is not None:
             self.reg_allocator.release_reg(gas_cond_arg1)
 
     def visit_push_arg(self, step: ir_bits.IRStep):
@@ -337,16 +356,24 @@ class GASEmitter(IRVisitor):
 
     def visit_store_yield(self, step: ir_bits.IRStep):
         result_ir_dest: str = step.target
-        result_gas_dest = self.ir_to_gasreg.get(result_ir_dest) or self.ir_to_gastemp(result_ir_dest)
+        result_gas_dest = self.ir_to_gasreg.get(result_ir_dest) or self.ir_to_gastemp.get(result_ir_dest)
+
+        if not result_gas_dest:
+            result_gas_dest = self.reg_allocator.allocate_reg(RegisterKind.GENERAL)
+            self.ir_to_gasreg[result_ir_dest] = result_gas_dest
 
         self.results.append(f'\tmovq %rax, {result_gas_dest}\n')
 
     def visit_load_param(self, step: ir_bits.IRStep):
-        param_gas_dest: str = self.reg_allocator.allocate_reg(RegisterKind.ARG)
-        param_ir_src: str = self.current_funcinfo.pop(0)[1]
-        param_gas_src: str = self.ir_to_gastemp.get(param_ir_src)
+        param_gas_src: str = self.reg_allocator.allocate_reg(RegisterKind.ARG)
+        param_info = self.current_funcinfo.pop(0)
+        param_ir_src: str = param_info[1]
+        param_gas_dst: str = self.ir_to_gastemp.get(param_ir_src)
 
-        self.results.append(f'\tmovq {param_gas_src}, {param_gas_dest}\n')
+        if not param_gas_dst:
+            param_gas_dst = self.temp_allocator.allocate_temp(param_info)
+
+        self.results.append(f'\tmovq {param_gas_src}, {param_gas_dst}\n')
 
     def visit_call_func(self, step: ir_bits.IRStep):
         self.results.append(f'\tpush %r10\n')
@@ -376,9 +403,9 @@ class GASEmitter(IRVisitor):
         arg1_gas_addr = self.ir_to_gasreg.get(ir_arg1) or self.ir_to_gastemp.get(ir_arg1)
 
         if not arg0_gas_addr:
-            arg0_gas_addr = ir_arg0
+            arg0_gas_addr = f'${ir_arg0}'
         if not arg1_gas_addr:
-            arg1_gas_addr = ir_arg1
+            arg1_gas_addr = f'${ir_arg1}'
 
         match gas_op:
             case 'neg':
@@ -425,12 +452,12 @@ class GASEmitter(IRVisitor):
 
         if type(arg0_gas_addr) == str and arg0_gas_addr[0] != '-':
             self.reg_allocator.release_reg(arg0_gas_addr)
-        elif type(arg0_gas_addr) == str:
+        elif type(arg0_gas_addr) == str and arg0_gas_addr[0] == '%':
             self.temp_allocator.release_temp(arg0_gas_addr)
 
         if type(arg1_gas_addr) == str and arg1_gas_addr[0] != '-':
             self.reg_allocator.release_reg(arg1_gas_addr)
-        elif type(arg1_gas_addr) == str:
+        elif type(arg1_gas_addr) == str and arg0_gas_addr[0] == '%':
             self.temp_allocator.release_temp(arg1_gas_addr)
 
     def visit_load_const(self, step: ir_bits.IRStep):
