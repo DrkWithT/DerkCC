@@ -171,7 +171,7 @@ class IREmitter(ASTVisitor):
             self.results.append(ir_types.IRJumpIf(target_label, ir_types.IROp.COMPARE_EQ, 0, temp))
             self.toggle_addr_usage(temp)
 
-    def visit_literal(self, node: ast.Expr) -> tuple[bool, "any"]:
+    def visit_literal(self, node: ast.Expr) -> str | int:
         # NOTE literal_token: Literal.LiteralData & literal_arrtype: Literal.ArrayType
         literal_token, literal_arrtype = node.get_data()
 
@@ -181,19 +181,11 @@ class IREmitter(ASTVisitor):
             raw_value = 0
 
             if literal_token[2] == TokenType.LITERAL_INT:
-                value_addr = self.allocate_addr()
                 raw_value = int(lexeme)
-                self.results.append(
-                    ir_types.IRLoadConst(value_addr, raw_value)
-                )
-                return value_addr
+                return raw_value
             elif literal_token[2] == TokenType.LITERAL_CHAR:
-                value_addr = self.allocate_addr()
                 raw_value = ord(lexeme[0])
-                self.results.append(
-                    ir_types.IRLoadConst(value_addr, raw_value)
-                )
-                return value_addr
+                return raw_value
             elif literal_token[2] == TokenType.IDENTIFIER:
                 value_addr = self.name_to_addr_table.get(lexeme)
                 return value_addr
@@ -202,16 +194,19 @@ class IREmitter(ASTVisitor):
             pass
 
     def visit_unary(self, node: ast.Expr):
-        src_addr = node.get_inner().accept_visitor(self)
+        src_item: str | int = node.get_inner().accept_visitor(self)
         op = node.get_op_type()
         dest_addr = self.allocate_addr()
 
-        if op == ast.OpType.OP_NEG:
-            self.results.append(ir_types.IRAssign(dest_addr, ir_types.IROp.NEGATE, src_addr, None))
-            self.toggle_addr_usage(src_addr)
+        if op != ast.OpType.OP_NEG:
+            return
+        
+        if type(src_item) == str:
+            self.results.append(ir_types.IRAssign(dest_addr, ir_types.IROp.NEGATE, src_item, None))
+            self.toggle_addr_usage(src_item)
             return dest_addr
-
-        return None
+        else:
+            return -src_item
 
     def visit_binary(self, node: ast.Expr):
         expr_lhs: ast.Expr = node.get_lhs()
@@ -250,21 +245,21 @@ class IREmitter(ASTVisitor):
             self.results.append(ir_types.IRAssign(dest_addr, ir_types.IROp.NOP, 0, None))
             self.results.append(ir_types.IRLabel(skippy_label))
         elif op != ast.OpType.OP_ASSIGN:
-            arg0_addr = expr_lhs.accept_visitor(self)
-            arg1_addr = expr_rhs.accept_visitor(self)
+            arg0_item = expr_lhs.accept_visitor(self)
+            arg1_item = expr_rhs.accept_visitor(self)
             dest_addr = self.allocate_addr()
 
-            self.results.append(ir_types.IRAssign(dest_addr, ir_types.IROp(op.value), arg0_addr, arg1_addr))
+            self.results.append(ir_types.IRAssign(dest_addr, ir_types.IROp(op.value), arg0_item, arg1_item))
 
-            self.toggle_addr_usage(arg1_addr)
-            self.toggle_addr_usage(arg0_addr)
+            self.toggle_addr_usage(arg1_item)
+            self.toggle_addr_usage(arg0_item)
         else:
             dest_addr = expr_lhs.accept_visitor(self)
-            value_addr = expr_rhs.accept_visitor(self)
+            value_item = expr_rhs.accept_visitor(self)
 
-            if value_addr is not None:
-                self.results.append(ir_types.IRAssign(dest_addr, ir_types.IROp.NOP, value_addr, None))
-                self.toggle_addr_usage(value_addr)
+            if value_item is not None:
+                self.results.append(ir_types.IRAssign(dest_addr, ir_types.IROp.NOP, value_item, None))
+                self.toggle_addr_usage(value_item)
 
         return dest_addr
 
@@ -308,7 +303,7 @@ class IREmitter(ASTVisitor):
         func_name: str = node.get_name()
         func_param_v: ast.ParamList = node.get_params()
         self.curr_func_name = func_name
-        self.funcs[func_name] = []
+        self.record_func_name(func_name)
 
         self.results.append(ir_types.IRLabel(func_name))
 
@@ -361,8 +356,15 @@ class IREmitter(ASTVisitor):
 
     def visit_return(self, node: ast.Stmt):
         result_dest = self.allocate_addr()
-        result_src = node.get_result_expr().accept_visitor(self)
+        result_expr = node.get_result_expr()
+        result_src = result_expr.accept_visitor(self)
         self.temp_returns.append(result_dest)
+        result_type = result_expr.deduce_early_type()
+
+        if result_type == ast.DataType.UNKNOWN and type(result_expr) == ast.Call:
+            result_type = self.sem_table.get('.global').get(result_expr.get_name()).data_type
 
         self.results.append(ir_types.IRAssign(result_dest, ir_types.IROp.NOP, result_src, None))
+        self.register_func_local(self.curr_func_name, result_type, result_dest, False)
         self.results.append(ir_types.IRJump(self.temp_exits[0]))
+        print(self.funcs.get(self.curr_func_name)) # debug

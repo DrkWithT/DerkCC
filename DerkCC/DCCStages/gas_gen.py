@@ -58,9 +58,9 @@ IR_OP_TO_GAS = {
     "NOP": "nop"
 }
 
-GENERAL_REGS_64 = ['r10', 'r11', 'rbx', 'r12', 'r13', 'r14', 'r15']
+GENERAL_REGS_64 = ['%r10', '%r11', '%rbx', '%r12', '%r13', '%r14', '%r15']
 # GENERAL_REGS_32 = ['r10d', 'r11d', 'ebx', 'r12d', 'r13d', 'r14d', 'r15d']
-ARG_REGS_64 = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
+ARG_REGS_64 = ['%rdi', '%rsi', '%rdx', '%rcx', '%r8', '%r9']
 # ARG_REGS_32 = ['edi', 'esi', 'edx', 'ecx', 'r8d', 'r9d']
 RET_REG = '%rax'
 
@@ -73,6 +73,7 @@ ASMLines = list[str]
 ## Utility functions ##
 
 def roundup_offset(acc_offset: int, align_n: int = 16):
+    # NOTE from 9cc repo: https://github.com/rui314/9cc/blob/master/gen_x86.c
     mask = align_n - 1
     return (acc_offset + mask) & ~(mask)
 
@@ -86,6 +87,7 @@ class RegisterAllocator:
     arg_lru: list[str]
 
     def __init__(self):
+        self.gen_names = [gen for gen in GENERAL_REGS_64]
         self.gen_pool = {}
         self.arg_names = [arg for arg in ARG_REGS_64]
         self.arg_pool = {}
@@ -93,10 +95,10 @@ class RegisterAllocator:
         self.arg_lru = []
 
         for reg64 in GENERAL_REGS_64:
-            self.gen_pool[reg64] = False
+            self.gen_pool[reg64] = True
 
         for arg64 in ARG_REGS_64:
-            self.gen_pool[arg64] = False
+            self.arg_pool[arg64] = False
 
     def salvage_oldest_reg(self, kind: RegisterKind) -> str | None:
         pool_ref = self.gen_pool if kind == RegisterKind.GENERAL else self.arg_pool
@@ -157,9 +159,10 @@ class TempAllocator:
         self.frame_offset = 0
         self.max_local_count = local_n
         self.local_count = 0
+        print(f'gas_gen.py::TempAllocator [LOG]: max={self.max_local_count} , c={self.local_count}')
 
     def allocate_temp(self, var: ir_gen.LocalRecord) -> str | None:
-        if self.max_local_count == 0 or self.local_count >= self.max_local_count:
+        if self.local_count >= self.max_local_count:
             return None
 
         var_datatype = var[0].name
@@ -183,6 +186,7 @@ class TempAllocator:
             return False
 
         self.temp_pool[gas_temp_addr] = False
+        self.local_count -= 1
         return True
 
 ## Emitter ##
@@ -230,18 +234,19 @@ class GASEmitter(IRVisitor):
             # 2. allocate params and locals to stack locations...
             self.current_funcinfo = [item for item in self.func_info.get(label_name)]
             self.temp_allocator.reset_state(len(self.current_funcinfo))
+            print(f'gas_gen.py [LOG]: reset temp_n as {len(self.current_funcinfo)}') # debug
 
             for fn_local in self.current_funcinfo:
                 datatype, ir_addr, is_param = fn_local
 
-                if is_param:
+                if is_param is not False:
                     param_dest = self.temp_allocator.allocate_temp(fn_local)
                     self.ir_to_gastemp[ir_addr] = param_dest
                 else:
                     var_dest = self.temp_allocator.allocate_temp(fn_local)
                     self.ir_to_gastemp[ir_addr] = var_dest
 
-            self.results.append(f'\tsub {self.temp_allocator.get_frame_offset()}, %rbp\n')
+            self.results.append(f'\tsubq ${self.temp_allocator.get_frame_offset()}, %rbp\n')
 
             # 3. this function will preserve some special registers
             self.results.append(f'\tpushq %r12\n')
@@ -250,7 +255,7 @@ class GASEmitter(IRVisitor):
             self.results.append(f'\tpushq %r15\n')
 
     def visit_return(self, step: ir_bits.IRStep):
-        result_gas_addr = self.ir_to_gasreg.get(step.result_addr) or self.ir_to_gastemp(step.result_addr)
+        result_gas_addr = self.ir_to_gasreg.get(step.result_addr) or self.ir_to_gastemp.get(step.result_addr)
 
         self.results.append(f'\tmovq {result_gas_addr}, {self.reg_allocator.get_ret_reg()}')
         self.results.append(f'\tpopq %r15\n')
@@ -260,6 +265,8 @@ class GASEmitter(IRVisitor):
         self.results.append(f'\tmov %rbp, %rsp\n')
         self.results.append(f'\tpopq %rbp\n')
         self.results.append(f'\tret\n')
+
+        self.current_funcinfo = None
 
     def visit_jump(self, step: ir_bits.IRStep):
         target_label: str = step.target
@@ -294,7 +301,7 @@ class GASEmitter(IRVisitor):
                 self.results.append(f'\tjge {jump_dest}\n')
             case 'nop':
                 pass
-        
+
         if type(gas_cond_arg0) == int:
             pass
         elif gas_cond_arg0[0] == '-':
@@ -355,16 +362,23 @@ class GASEmitter(IRVisitor):
         ir_arg0: str | int = step.arg0
         ir_arg1: str | int | None = step.arg1 or '?'
         
-        gas_op = IR_OP_TO_GAS.get(ir_op) or 'nop'
+        gas_op = IR_OP_TO_GAS.get(ir_op.name) or '?'
 
-        dest_gas_addr = self.ir_to_gasreg.get(ir_dest) or self.ir_to_gastemp.get(ir_dest)
+        dest_gas_addr = dest_gas_addr = self.ir_to_gastemp.get(ir_dest)
 
         if not dest_gas_addr:
             dest_gas_addr = self.reg_allocator.allocate_reg(RegisterKind.GENERAL)
             self.ir_to_gasreg[ir_dest] = dest_gas_addr
+        else:
+            self.ir_to_gastemp[ir_dest] = dest_gas_addr
 
         arg0_gas_addr = self.ir_to_gasreg.get(ir_arg0) or self.ir_to_gastemp.get(ir_arg0)
         arg1_gas_addr = self.ir_to_gasreg.get(ir_arg1) or self.ir_to_gastemp.get(ir_arg1)
+
+        if not arg0_gas_addr:
+            arg0_gas_addr = ir_arg0
+        if not arg1_gas_addr:
+            arg1_gas_addr = ir_arg1
 
         match gas_op:
             case 'neg':
@@ -375,7 +389,7 @@ class GASEmitter(IRVisitor):
                 self.results.append(f'\tadd {arg1_gas_addr}, {dest_gas_addr}\n')
             case 'sub':
                 self.results.append(f'\tmovq {arg1_gas_addr}, {dest_gas_addr}\n')
-                self.results.append(f'\tsub {arg0_gas_addr}, {dest_gas_addr}\n')
+                self.results.append(f'\tsubq {arg0_gas_addr}, {dest_gas_addr}\n')
             case 'mul':
                 self.results.append(f'\tnop\n') # FIXME
                 pass
@@ -407,18 +421,34 @@ class GASEmitter(IRVisitor):
                 self.results.append(f'\tcmp {arg1_gas_addr}, {arg0_gas_addr}\n')
                 self.results.append(f'\tcmovge $1, {dest_gas_addr}\n')
             case 'nop':
-                pass
+                self.results.append(f'\tmovq {arg0_gas_addr}, {dest_gas_addr}\n')
 
-        if arg0_gas_addr is not None and arg0_gas_addr[0] != '-':
+        if type(arg0_gas_addr) == str and arg0_gas_addr[0] != '-':
             self.reg_allocator.release_reg(arg0_gas_addr)
+        elif type(arg0_gas_addr) == str:
+            self.temp_allocator.release_temp(arg0_gas_addr)
 
-        if arg1_gas_addr is not None and arg1_gas_addr[0] != '-':
+        if type(arg1_gas_addr) == str and arg1_gas_addr[0] != '-':
             self.reg_allocator.release_reg(arg1_gas_addr)
+        elif type(arg1_gas_addr) == str:
+            self.temp_allocator.release_temp(arg1_gas_addr)
 
     def visit_load_const(self, step: ir_bits.IRStep):
         ir_const_addr: str = step.addr
         ir_constant: int = step.value
+        func_const_info = None
+        print(self.current_funcinfo)
 
-        ir_const_gas_addr = self.temp_allocator.allocate_temp()
-        self.ir_to_gastemp[ir_const_addr] = ir_const_gas_addr
+        for entry in self.current_funcinfo:
+            if entry[1] == ir_const_addr:
+                func_const_info = entry
+                break
+
+        ir_const_gas_addr = self.temp_allocator.allocate_temp(func_const_info) or self.reg_allocator.allocate_reg(RegisterKind.GENERAL)
+
+        if ir_const_gas_addr[0] == '-':
+            self.ir_to_gastemp[ir_const_addr] = ir_const_gas_addr
+        else:
+            self.ir_to_gasreg[ir_const_addr] = ir_const_gas_addr
+
         self.results.append(f'\tmovq ${ir_constant}, {ir_const_gas_addr}\n')
