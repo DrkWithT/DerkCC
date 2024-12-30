@@ -6,6 +6,7 @@
 
 import dataclasses
 from enum import Enum, auto
+from DerkCC.DCCStages.ast_nodes import DataType
 
 ## Aliases and Types ##
 
@@ -130,6 +131,7 @@ class IRJumpIf(IRStep):
 class IRPushArg(IRStep):
     arg: str | int
     immediate: bool
+    arg_type: DataType
 
     def get_ir_type(self) -> IRType:
         return IRType.ARGV_PUSH

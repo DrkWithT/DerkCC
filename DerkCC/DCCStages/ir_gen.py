@@ -2,6 +2,7 @@
     ir_gen.py\n
     By DrkWithT\n
     Defines AST to IR converter.\n
+    TODO add type deduction for every AST name... a numeric result has the type of its operands??
 """
 
 from DerkCC.DCCStages.ast_visitor import ASTVisitor
@@ -44,17 +45,19 @@ class IREmitter(ASTVisitor):
             "B": False,
             "C": False
         }
-        self.name_to_addr_table = {
-            "A": None,
-            "B": None,
-            "C": None
-        }
+        self.name_to_addr_table = {}
         self.jump_label_i = 0
         self.temp_exits = []
         self.temp_returns = []
         self.curr_func_name = None
         self.funcs = FuncInfoTable()
         self.results = []
+
+    def release_all_addrs(self):
+        for addr in self.addr_table:
+            self.addr_table[addr] = False
+
+        self.name_to_addr_table.clear()
 
     def toggle_addr_usage(self, id: str):
         # NOTE an IR address is "used" during initialization or operations.
@@ -105,7 +108,8 @@ class IREmitter(ASTVisitor):
         self.funcs[fn_name] = []
 
     def register_func_local(self, fn_name: str, local_type: ast.DataType, local_ir_name: str, is_param: bool):
-        self.funcs[fn_name].append((local_type, local_ir_name, is_param))
+        if local_type != ast.DataType.UNKNOWN:
+            self.funcs[fn_name].append((local_type, local_ir_name, is_param))
 
     def get_func_infos(self) -> FuncInfoTable:
         return self.funcs
@@ -269,15 +273,17 @@ class IREmitter(ASTVisitor):
         func_argv: ast.Call.ArgList = node.get_args()
 
         for arg in func_argv:
+            arg_type = arg.deduce_early_type()
+
             if arg.get_op_type() == ast.OpType.OP_NONE:
                 # NOTE either check lexeme of literal for its value...
                 temp_lexeme: str = arg.get_data()[0][0]
                 temp_value = int(temp_lexeme) if temp_lexeme[0] != '\'' else ord(temp_lexeme[1])
-                self.results.append(ir_types.IRPushArg(temp_value, True))
+                self.results.append(ir_types.IRPushArg(temp_value, True, arg_type))
             else:
                 # ... or just process a temporary value from an arg. expr.
                 temp_arg_addr: str = arg.accept_visitor(self)
-                self.results.append(ir_types.IRPushArg(temp_arg_addr, False))
+                self.results.append(ir_types.IRPushArg(temp_arg_addr, False, arg_type))
 
         self.results.append(ir_types.IRCallFunc(func_name))
 
@@ -324,7 +330,7 @@ class IREmitter(ASTVisitor):
 
         self.curr_func_name = None
         self.temp_exits.clear()
-        self.name_to_addr_table.clear()
+        self.release_all_addrs()
 
     def visit_expr_stmt(self, node: ast.Stmt):
         op = node.get_inner().get_op_type()
